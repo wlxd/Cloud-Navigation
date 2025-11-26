@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sparkles, Loader2, Pin } from 'lucide-react';
-import { LinkItem, Category } from '../types';
+import { LinkItem, Category, AIConfig } from '../types';
 import { generateLinkDescription, suggestCategory } from '../services/geminiService';
 
 interface LinkModalProps {
@@ -9,9 +9,10 @@ interface LinkModalProps {
   onSave: (link: Omit<LinkItem, 'id' | 'createdAt'>) => void;
   categories: Category[];
   initialData?: LinkItem;
+  aiConfig: AIConfig;
 }
 
-const LinkModal: React.FC<LinkModalProps> = ({ isOpen, onClose, onSave, categories, initialData }) => {
+const LinkModal: React.FC<LinkModalProps> = ({ isOpen, onClose, onSave, categories, initialData, aiConfig }) => {
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
@@ -45,12 +46,17 @@ const LinkModal: React.FC<LinkModalProps> = ({ isOpen, onClose, onSave, categori
 
   const handleAIAssist = async () => {
     if (!url || !title) return;
+    if (!aiConfig.apiKey) {
+        alert("请先点击侧边栏左下角设置图标配置 AI API Key");
+        return;
+    }
+
     setIsGenerating(true);
     
     // Parallel execution for speed
     try {
-        const descPromise = generateLinkDescription(title, url);
-        const catPromise = suggestCategory(title, url, categories);
+        const descPromise = generateLinkDescription(title, url, aiConfig);
+        const catPromise = suggestCategory(title, url, categories, aiConfig);
         
         const [desc, cat] = await Promise.all([descPromise, catPromise]);
         

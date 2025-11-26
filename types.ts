@@ -29,6 +29,15 @@ export interface WebDavConfig {
   enabled: boolean;
 }
 
+export type AIProvider = 'gemini' | 'openai';
+
+export interface AIConfig {
+  provider: AIProvider;
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+}
+
 export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'common', name: '常用推荐', icon: 'Star' },
   { id: 'dev', name: '开发工具', icon: 'Code' },

@@ -4,7 +4,7 @@ import {
   Trash2, Edit2, Loader2, Cloud, CheckCircle2, AlertCircle,
   Pin, Settings, Lock, CloudCog, Github, GitFork
 } from 'lucide-react';
-import { LinkItem, Category, DEFAULT_CATEGORIES, INITIAL_LINKS, WebDavConfig } from './types';
+import { LinkItem, Category, DEFAULT_CATEGORIES, INITIAL_LINKS, WebDavConfig, AIConfig } from './types';
 import { parseBookmarks } from './services/bookmarkParser';
 import Icon from './components/Icon';
 import LinkModal from './components/LinkModal';
@@ -13,6 +13,7 @@ import CategoryManagerModal from './components/CategoryManagerModal';
 import BackupModal from './components/BackupModal';
 import CategoryAuthModal from './components/CategoryAuthModal';
 import ImportModal from './components/ImportModal';
+import SettingsModal from './components/SettingsModal';
 
 // --- 配置项 ---
 // TODO: 请将此处修改为您自己的 GitHub 仓库地址
@@ -21,6 +22,7 @@ const GITHUB_REPO_URL = 'https://github.com/maodeyu180/mao_nav';
 const LOCAL_STORAGE_KEY = 'cloudnav_data_cache';
 const AUTH_KEY = 'cloudnav_auth_token';
 const WEBDAV_CONFIG_KEY = 'cloudnav_webdav_config';
+const AI_CONFIG_KEY = 'cloudnav_ai_config';
 
 function App() {
   // --- State ---
@@ -41,6 +43,24 @@ function App() {
       password: '',
       enabled: false
   });
+
+  // AI Config State
+  const [aiConfig, setAiConfig] = useState<AIConfig>(() => {
+      const saved = localStorage.getItem(AI_CONFIG_KEY);
+      if (saved) {
+          try {
+              return JSON.parse(saved);
+          } catch (e) {}
+      }
+      return {
+          provider: 'gemini',
+          // Try to use injected env if available, else empty.
+          // Note: In client-side build process.env might need specific config, but we leave it as fallback.
+          apiKey: process.env.API_KEY || '', 
+          baseUrl: '',
+          model: 'gemini-2.5-flash'
+      };
+  });
   
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -48,6 +68,7 @@ function App() {
   const [isCatManagerOpen, setIsCatManagerOpen] = useState(false);
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [catAuthModalData, setCatAuthModalData] = useState<Category | null>(null);
   
   const [editingLink, setEditingLink] = useState<LinkItem | undefined>(undefined);
@@ -252,6 +273,11 @@ function App() {
       updateData(updated, categories);
   };
 
+  const handleSaveAIConfig = (config: AIConfig) => {
+      setAiConfig(config);
+      localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+  };
+
   // --- Category Management & Security ---
 
   const handleCategoryClick = (cat: Category) => {
@@ -434,6 +460,13 @@ function App() {
         onImport={handleImportConfirm}
       />
 
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        config={aiConfig}
+        onSave={handleSaveAIConfig}
+      />
+
       {/* Sidebar Mobile Overlay */}
       {sidebarOpen && (
         <div 
@@ -507,21 +540,32 @@ function App() {
         {/* Footer Actions */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
             
-            <div className="grid grid-cols-2 gap-2 mb-2">
+            <div className="grid grid-cols-3 gap-2 mb-2">
                 <button 
-                onClick={() => { if(!authToken) setIsAuthOpen(true); else setIsImportModalOpen(true); }}
-                className="flex items-center justify-center gap-1 px-2 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 transition-all"
+                    onClick={() => { if(!authToken) setIsAuthOpen(true); else setIsImportModalOpen(true); }}
+                    className="flex flex-col items-center justify-center gap-1 p-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 transition-all"
+                    title="导入书签"
                 >
-                <Upload size={14} />
-                <span>导入</span>
+                    <Upload size={14} />
+                    <span>导入</span>
                 </button>
                 
                 <button 
-                onClick={() => { if(!authToken) setIsAuthOpen(true); else setIsBackupModalOpen(true); }}
-                className="flex items-center justify-center gap-1 px-2 py-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 transition-all"
+                    onClick={() => { if(!authToken) setIsAuthOpen(true); else setIsBackupModalOpen(true); }}
+                    className="flex flex-col items-center justify-center gap-1 p-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 transition-all"
+                    title="备份与恢复"
                 >
-                <CloudCog size={14} />
-                <span>备份</span>
+                    <CloudCog size={14} />
+                    <span>备份</span>
+                </button>
+
+                <button 
+                    onClick={() => setIsSettingsModalOpen(true)}
+                    className="flex flex-col items-center justify-center gap-1 p-2 text-xs text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 transition-all"
+                    title="AI 设置"
+                >
+                    <Settings size={14} />
+                    <span>设置</span>
                 </button>
             </div>
             
@@ -668,6 +712,7 @@ function App() {
         onSave={editingLink ? handleEditLink : handleAddLink}
         categories={categories}
         initialData={editingLink}
+        aiConfig={aiConfig}
       />
     </div>
   );
