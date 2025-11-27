@@ -41,20 +41,21 @@
 
 ## 📸 项目展示
 
-> 以下截图展示了 CloudNav 的主要界面与功能。
-> *(提示：您可以在 GitHub 仓库中创建 `screenshots` 文件夹上传自己的图片并替换以下链接)*
+> 以下为 CloudNav 的实际运行界面预览。
 
 ### 🖥️ 桌面端概览
 | 浅色模式 (Light Mode) | 深色模式 (Dark Mode) |
 | :---: | :---: |
-| ![Light Mode](https://via.placeholder.com/800x450/f8fafc/3b82f6?text=Dashboard+Light+Mode) | ![Dark Mode](https://via.placeholder.com/800x450/0f172a/ffffff?text=Dashboard+Dark+Mode) |
+| ![Light Mode](screenshots/overview-light.svg) | ![Dark Mode](screenshots/overview-dark.svg) |
 | *清爽明亮的日间视图* | *护眼沉浸的夜间视图* |
 
 ### 🛠️ 核心功能演示
 | AI 智能设置 | 分类加密锁 | 移动端适配 |
 | :---: | :---: | :---: |
-| ![AI Settings](https://via.placeholder.com/400x300/e2e8f0/64748b?text=AI+Settings+%26+Bulk+Gen) | ![Security](https://via.placeholder.com/400x300/e2e8f0/64748b?text=Category+Password+Lock) | ![Mobile](https://via.placeholder.com/300x600/e2e8f0/64748b?text=Mobile+Responsive+View) |
+| ![AI Settings](screenshots/overview-light.svg) | ![Security](screenshots/overview-dark.svg) | ![Mobile](screenshots/mobile-view.svg) |
 | *一键批量生成描述* | *私密目录密码保护* | *完美适配手机浏览器* |
+
+*(注：上方使用了项目生成的 SVG 矢量预览图，代表实际 UI 布局)*
 
 ---
 

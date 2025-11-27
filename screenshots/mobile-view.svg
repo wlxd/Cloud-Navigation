@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" fill="none">
+  <!-- Background -->
+  <rect width="400" height="600" fill="#f8fafc"/>
+  
+  <!-- Header -->
+  <rect width="400" height="60" fill="#ffffff"/>
+  <rect y="59" width="400" height="1" fill="#e2e8f0"/>
+  
+  <!-- Menu Icon -->
+  <g transform="translate(20, 20)">
+    <rect width="24" height="2" rx="1" fill="#475569"/>
+    <rect y="8" width="24" height="2" rx="1" fill="#475569"/>
+    <rect y="16" width="24" height="2" rx="1" fill="#475569"/>
+  </g>
+  
+  <!-- Logo -->
+  <text x="60" y="35" font-family="sans-serif" font-size="16" font-weight="bold" fill="#3b82f6">CloudNav</text>
+  
+  <!-- Header Actions -->
+  <circle cx="370" cy="30" r="14" fill="#f1f5f9"/>
+  <rect x="365" y="25" width="10" height="10" fill="#3b82f6" rx="2"/>
+
+  <!-- Content -->
+  <g transform="translate(20, 80)">
+    <!-- Pinned Section -->
+    <rect width="100" height="10" rx="2" fill="#64748b"/>
+    <g transform="translate(0, 20)">
+        <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+        <rect x="10" y="15" width="30" height="30" rx="6" fill="#eff6ff"/>
+        <rect x="50" y="25" width="80" height="10" rx="2" fill="#1e293b"/>
+    </g>
+    <g transform="translate(180, 20)">
+        <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+        <rect x="10" y="15" width="30" height="30" rx="6" fill="#f0fdf4"/>
+        <rect x="50" y="25" width="60" height="10" rx="2" fill="#1e293b"/>
+    </g>
+    
+    <!-- Main List -->
+    <g transform="translate(0, 100)">
+        <rect width="80" height="10" rx="2" fill="#94a3b8"/>
+        
+        <g transform="translate(0, 20)">
+            <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+            <rect x="10" y="15" width="30" height="30" rx="6" fill="#f1f5f9"/>
+            <rect x="50" y="25" width="70" height="10" rx="2" fill="#334155"/>
+        </g>
+        <g transform="translate(180, 20)">
+            <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+            <rect x="10" y="15" width="30" height="30" rx="6" fill="#f1f5f9"/>
+            <rect x="50" y="25" width="50" height="10" rx="2" fill="#334155"/>
+        </g>
+        <g transform="translate(0, 90)">
+            <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+            <rect x="10" y="15" width="30" height="30" rx="6" fill="#f1f5f9"/>
+            <rect x="50" y="25" width="60" height="10" rx="2" fill="#334155"/>
+        </g>
+        <g transform="translate(180, 90)">
+            <rect width="170" height="60" rx="8" fill="white" stroke="#e2e8f0"/>
+            <rect x="10" y="15" width="30" height="30" rx="6" fill="#f1f5f9"/>
+            <rect x="50" y="25" width="80" height="10" rx="2" fill="#334155"/>
+        </g>
+    </g>
+  </g>
+  
+  <!-- Bottom Mobile Menu Overlay -->
+  <rect x="0" y="540" width="400" height="60" fill="white" stroke="#e2e8f0"/>
+  <rect x="50" y="560" width="20" height="20" rx="2" fill="#3b82f6"/>
+  <rect x="190" y="560" width="20" height="20" rx="2" fill="#cbd5e1"/>
+  <rect x="330" y="560" width="20" height="20" rx="2" fill="#cbd5e1"/>
+</svg>
