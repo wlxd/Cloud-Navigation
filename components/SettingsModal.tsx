@@ -233,17 +233,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     const json: any = {
         manifest_version: 3,
         name: (localSiteSettings.navTitle || "CloudNav") + " Pro",
-        version: "7.1", // Bump version
+        version: "7.2",
         minimum_chrome_version: "116",
-        description: "CloudNav 侧边栏导航 - 极速响应版",
-        permissions: ["activeTab", "scripting", "sidePanel", "storage", "favicon", "contextMenus"],
+        description: "CloudNav 侧边栏导航 - 右键极速保存版",
+        permissions: ["activeTab", "scripting", "sidePanel", "storage", "favicon", "contextMenus", "notifications"],
         background: {
             service_worker: "background.js"
         },
-        // 关键改动：恢复 default_popup
+        // 回归经典：_execute_action 统一管理点击和快捷键
         action: {
-            default_title: "添加链接到 CloudNav",
-            default_popup: "popup.html"
+            default_title: "打开侧边栏 (Ctrl+Shift+E)"
         },
         side_panel: {
             default_path: "sidebar.html"
@@ -251,9 +250,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         icons: {
             "128": "icon.png"
         },
-        // 关键改动：将侧边栏开关绑定到自定义命令，而非 _execute_action
         commands: {
-          "toggle_sidebar": {
+          "_execute_action": {
             "suggested_key": {
               "default": "Ctrl+Shift+E",
               "mac": "Command+Shift+E"
@@ -275,25 +273,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     return JSON.stringify(json, null, 2);
   };
 
-  const extBackgroundJs = `// background.js - CloudNav Assistant v7.1
+  const extBackgroundJs = `// background.js - CloudNav Assistant v7.2
+// 内置配置
+const CONFIG = {
+  apiBase: "${domain}",
+  password: "${password}"
+};
 
-// 存储当前所有打开的侧边栏端口连接
-// Key: windowId (数字), Value: Port 对象
+// 1. 侧边栏管理 (115 架构)
 const windowPorts = {};
 
-// 1. 监听来自侧边栏的连接 (侧边栏打开时会自动连接)
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'cloudnav_sidebar') return;
-
-  // 监听侧边栏发来的初始化消息，获取它所在的 windowId
   port.onMessage.addListener((msg) => {
     if (msg.type === 'init' && msg.windowId) {
-      // console.log('Sidebar connected for window:', msg.windowId);
       windowPorts[msg.windowId] = port;
-
-      // 当侧边栏断开连接（被手动关闭或窗口关闭）时，清理记录
       port.onDisconnect.addListener(() => {
-        // console.log('Sidebar disconnected for window:', msg.windowId);
         if (windowPorts[msg.windowId] === port) {
           delete windowPorts[msg.windowId];
         }
@@ -302,17 +297,13 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
-// 2. 监听快捷键命令 (Toggle Sidebar)
-// 之前是 onClicked，现在左键给了 Popup，所以侧边栏逻辑移到这里
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command === 'toggle_sidebar') {
-    const window = await chrome.windows.getLastFocused();
-    const windowId = window.id;
+// 左键点击 & 快捷键统一处理
+chrome.action.onClicked.addListener(async (tab) => {
+    const windowId = tab.windowId;
     const existingPort = windowPorts[windowId];
 
     if (existingPort) {
-        // 【关闭逻辑】：如果端口存在，说明侧边栏是打开的
-        // console.log('Toggle: Closing sidebar for window', windowId);
+        // 关闭
         try {
             existingPort.postMessage({ action: 'close_panel' });
         } catch (e) {
@@ -320,189 +311,106 @@ chrome.commands.onCommand.addListener(async (command) => {
             chrome.sidePanel.open({ windowId });
         }
     } else {
-        // 【打开逻辑】：端口不存在，直接打开
-        // console.log('Toggle: Opening sidebar for window', windowId);
+        // 打开
         try {
             await chrome.sidePanel.open({ windowId: windowId });
         } catch (e) {
             console.error('Failed to open sidebar', e);
         }
     }
-  }
 });
 
-// 3. 右键菜单支持
 chrome.runtime.onInstalled.addListener(() => {
+  // 禁用默认打开行为，完全由 onClicked 控制
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+  
+  // 初始化菜单
+  buildContextMenu();
+});
+
+// 2. 右键菜单逻辑 (手风琴/层级效果)
+const ROOT_MENU_ID = "cloudnav_root";
+
+async function buildContextMenu() {
+    chrome.contextMenus.removeAll();
+
     chrome.contextMenus.create({
-        id: "save_to_cloudnav",
-        title: "保存到 CloudNav",
+        id: ROOT_MENU_ID,
+        title: "⚡ 保存到 CloudNav",
+        contexts: ["page", "link"]
+    });
+
+    // 尝试从 storage 读取最新的分类
+    const data = await chrome.storage.local.get('cloudnav_data');
+    const categories = data?.cloudnav_data?.categories || [];
+
+    if (categories.length > 0) {
+        categories.forEach(cat => {
+            chrome.contextMenus.create({
+                id: \`save_to_\${cat.id}\`,
+                parentId: ROOT_MENU_ID,
+                title: cat.name, // 直接显示分类名称，如 "常用推荐"
+                contexts: ["page", "link"]
+            });
+        });
+    } else {
+        // 如果没有数据，提供默认选项
+        chrome.contextMenus.create({
+            id: "save_to_common",
+            parentId: ROOT_MENU_ID,
+            title: "默认分类",
+            contexts: ["page", "link"]
+        });
+    }
+    
+    chrome.contextMenus.create({
+        id: "sep_1",
+        parentId: ROOT_MENU_ID,
+        type: "separator",
         contexts: ["page", "link"]
     });
     
-    // 确保点击图标不会默认打开侧边栏 (我们要自己控制, 或者让 default_popup 接管)
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
-});
+    chrome.contextMenus.create({
+        id: "open_sidebar_action",
+        parentId: ROOT_MENU_ID,
+        title: "打开侧边栏",
+        contexts: ["page", "link"]
+    });
+}
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "save_to_cloudnav") {
-        // 右键直接打开侧边栏 (或者 Popup，但 Manifest V3 不能程序化打开 Popup)
-        // 我们打开侧边栏并传递一个参数让它进入添加模式 (可选优化)
-        if (tab && tab.windowId) {
-            chrome.sidePanel.open({ windowId: tab.windowId });
-        }
+// 监听 storage 变化，实时更新菜单
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.cloudnav_data) {
+        buildContextMenu();
     }
 });
-`;
 
-  // Popup 逻辑 - 恢复快速添加功能
-  const extPopupHtml = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        body { width: 320px; font-family: -apple-system, sans-serif; padding: 16px; margin: 0; background: #f8fafc; color: #1e293b; }
-        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-        .title { font-weight: 600; font-size: 16px; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px; color: #64748b; }
-        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; box-sizing: border-box; font-size: 13px; outline: none; }
-        input:focus, select:focus, textarea:focus { border-color: #3b82f6; ring: 2px solid #eff6ff; }
-        button { width: 100%; background: #3b82f6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #2563eb; }
-        button:disabled { background: #cbd5e1; cursor: not-allowed; }
-        .status { margin-top: 8px; font-size: 12px; text-align: center; height: 16px; }
-        .success { color: #10b981; }
-        .error { color: #ef4444; }
-        .hidden { display: none; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="title">保存到 CloudNav</div>
-    </div>
-    <div id="loading" class="status">加载中...</div>
-    <div id="form" class="hidden">
-        <div class="form-group">
-            <label>标题</label>
-            <input type="text" id="title" placeholder="网站标题">
-        </div>
-        <div class="form-group">
-            <label>URL</label>
-            <input type="text" id="url" readonly>
-        </div>
-        <div class="form-group">
-            <label>分类</label>
-            <select id="category"></select>
-        </div>
-        <button id="saveBtn">保存链接</button>
-        <div id="status" class="status"></div>
-    </div>
-    <div id="auth-error" class="hidden">
-        <p style="font-size:13px; color:#ef4444; text-align:center;">未检测到登录信息。</p>
-        <p style="font-size:12px; color:#64748b; text-align:center;">请先打开侧边栏 (Ctrl+Shift+E) 并完成登录。</p>
-        <button id="openSidebar">打开侧边栏</button>
-    </div>
-    <script src="popup.js"></script>
-</body>
-</html>`;
-
-  const extPopupJs = `
-const CONFIG = {
-  apiBase: "${domain}",
-  password: "${password}"
-};
-const CACHE_KEY = 'cloudnav_data';
-
-document.addEventListener('DOMContentLoaded', async () => {
-    const form = document.getElementById('form');
-    const loading = document.getElementById('loading');
-    const authError = document.getElementById('auth-error');
-    const status = document.getElementById('status');
-    const saveBtn = document.getElementById('saveBtn');
-    
-    // Elements
-    const titleInput = document.getElementById('title');
-    const urlInput = document.getElementById('url');
-    const catSelect = document.getElementById('category');
-
-    // 1. Get Current Tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab) {
-        titleInput.value = tab.title || '';
-        urlInput.value = tab.url || '';
+// 监听菜单点击
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === "open_sidebar_action") {
+        if (tab.windowId) chrome.sidePanel.open({ windowId: tab.windowId });
+        return;
     }
 
-    // 2. Check Auth & Load Categories
-    if (!CONFIG.password) {
-        // Try fallback to local storage if user logged in via sidebar
-        // Note: localStorage in popup/sidebar/background is shared in extensions
-        // But CONFIG is hardcoded during download. 
-        // We will assume if password is empty in config, check chrome.storage
-    }
-
-    try {
-        let categories = [];
-        // Try local cache first
-        const cached = await chrome.storage.local.get(CACHE_KEY);
-        if (cached[CACHE_KEY] && cached[CACHE_KEY].categories) {
-            categories = cached[CACHE_KEY].categories;
-        } else {
-             // If no cache, try fetch (might fail if no password)
-             const res = await fetch(\`\${CONFIG.apiBase}/api/storage\`, {
-                headers: { 'x-auth-password': CONFIG.password }
-             });
-             if (res.ok) {
-                 const data = await res.json();
-                 categories = data.categories || [];
-             }
-        }
-
-        if (categories.length === 0 && !CONFIG.password) {
-            throw new Error("No Auth");
-        }
+    if (String(info.menuItemId).startsWith("save_to_")) {
+        const catId = String(info.menuItemId).replace("save_to_", "");
+        const title = tab.title;
+        const url = info.linkUrl || tab.url; // 优先保存右键点击的链接，否则保存当前页
         
-        // Populate Select
-        if (categories.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = 'common';
-            opt.text = '默认分类';
-            catSelect.appendChild(opt);
-        } else {
-            categories.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id;
-                opt.text = c.name;
-                catSelect.appendChild(opt);
-            });
+        // 获取图标
+        let iconUrl = '';
+        try {
+            const u = new URL(url);
+            iconUrl = \`https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=\${encodeURIComponent(u.origin)}&size=128\`;
+        } catch(e){}
+
+        if (!CONFIG.password) {
+            notify('保存失败', '未配置密码，请重新下载插件配置或先在侧边栏登录。');
+            return;
         }
 
-        loading.classList.add('hidden');
-        form.classList.remove('hidden');
-
-    } catch (e) {
-        loading.classList.add('hidden');
-        authError.classList.remove('hidden');
-    }
-
-    // 3. Save Handler
-    saveBtn.addEventListener('click', async () => {
-        const title = titleInput.value;
-        const url = urlInput.value;
-        const categoryId = catSelect.value;
-
-        if(!title || !url) return;
-
-        saveBtn.disabled = true;
-        saveBtn.innerText = '保存中...';
-
+        // 发送保存请求
         try {
-            // Get Icon
-            let iconUrl = '';
-            try {
-                const urlObj = new URL(url);
-                iconUrl = \`https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=\${encodeURIComponent(urlObj.origin)}&size=128\`;
-            } catch(e) {}
-
             const res = await fetch(\`\${CONFIG.apiBase}/api/link\`, {
                 method: 'POST',
                 headers: { 
@@ -510,38 +418,40 @@ document.addEventListener('DOMContentLoaded', async () => {
                     'x-auth-password': CONFIG.password
                 },
                 body: JSON.stringify({
-                    title,
-                    url,
-                    categoryId,
+                    title: title || '未命名',
+                    url: url,
+                    categoryId: catId,
                     icon: iconUrl
                 })
             });
 
             if (res.ok) {
-                status.className = 'status success';
-                status.innerText = '保存成功!';
-                setTimeout(() => window.close(), 1000);
-                
-                // Trigger sidebar refresh if open
+                notify('保存成功', \`已保存到 CloudNav\`);
+                // 通知侧边栏刷新
                 chrome.runtime.sendMessage({ type: 'refresh' }).catch(() => {});
             } else {
-                throw new Error('Save failed');
+                notify('保存失败', \`服务器返回错误: \${res.status}\`);
             }
         } catch (e) {
-            status.className = 'status error';
-            status.innerText = '保存失败，请检查网络或密码';
-            saveBtn.disabled = false;
-            saveBtn.innerText = '保存链接';
+            notify('保存失败', '网络请求错误，请检查网络。');
         }
-    });
-
-    document.getElementById('openSidebar').addEventListener('click', () => {
-        chrome.windows.getCurrent((win) => {
-             chrome.sidePanel.open({ windowId: win.id });
-        });
-    });
+    }
 });
+
+function notify(title, message) {
+    chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon.png',
+        title: title,
+        message: message,
+        priority: 1
+    });
+}
 `;
+
+  // Popup 不再使用
+  const extPopupHtml = ``; // Removed
+  const extPopupJs = ``; // Removed
 
   const extSidebarHtml = `<!DOCTYPE html>
 <html>
@@ -640,7 +550,6 @@ try {
     // 3. 监听关闭指令
     port.onMessage.addListener((msg) => {
         if (msg.action === 'close_panel') {
-            console.log('Received close command, closing window.');
             window.close(); // 只有在扩展页面内部调用有效
         }
     });
@@ -755,6 +664,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     allLinks = data.links || [];
                     allCategories = data.categories || [];
                     render(searchInput.value);
+                    // 即使有缓存，也可以在后台悄悄更新一下 Context Menu 的数据源
                     return;
                 }
             }
@@ -772,6 +682,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             allLinks = data.links || [];
             allCategories = data.categories || [];
             
+            // 重要：保存到 storage，供 Background 的右键菜单使用
             await chrome.storage.local.set({ [CACHE_KEY]: data });
             
             render(searchInput.value);
@@ -787,7 +698,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     searchInput.addEventListener('input', (e) => render(e.target.value));
     refreshBtn.addEventListener('click', () => loadData(true));
 
-    // Listen for refresh messages (e.g., from popup add)
+    // Listen for refresh messages
     chrome.runtime.onMessage.addListener((msg) => {
         if (msg.type === 'refresh') {
             loadData(true);
@@ -884,8 +795,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Files
         zip.file("manifest.json", getManifestJson());
         zip.file("background.js", extBackgroundJs);
-        zip.file("popup.html", extPopupHtml); 
-        zip.file("popup.js", extPopupJs);
+        // Popup removed
         zip.file("sidebar.html", extSidebarHtml);
         zip.file("sidebar.js", extSidebarJs);
         
@@ -1255,16 +1165,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                                         className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl transition-colors shadow-lg shadow-blue-500/20"
                                     >
                                         <Package size={20} />
-                                        {isZipping ? '打包中...' : '📦 一键下载所有文件 (v7.1 Pro)'}
+                                        {isZipping ? '打包中...' : '📦 一键下载所有文件 (v7.2 Pro)'}
                                     </button>
                                 </div>
                                 
                                 <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded border border-green-200 dark:border-green-900/50 text-sm space-y-2">
-                                    <div className="font-bold flex items-center gap-2"><MousePointerClick size={16}/> 完美交互方案 (v7.1):</div>
+                                    <div className="font-bold flex items-center gap-2"><MousePointerClick size={16}/> 完美交互方案 (v7.2):</div>
                                     <ul className="list-disc list-inside text-xs space-y-1">
-                                        <li><strong>左键点击图标:</strong> 弹出 "快速添加" 菜单。</li>
-                                        <li><strong>快捷键 (Ctrl+Shift+E):</strong> 切换侧边栏 (自关闭)。</li>
-                                        <li><strong>右键菜单:</strong> 增加 "保存到 CloudNav" 选项。</li>
+                                        <li><strong>左键 / 快捷键:</strong> 极速打开/关闭侧边栏 (无弹窗延迟)。</li>
+                                        <li><strong>右键菜单:</strong> 级联显示分类，点击直接保存当前网页到云端。</li>
                                     </ul>
                                 </div>
                             </div>
@@ -1293,12 +1202,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                                 </div>
                                 {renderCodeBlock('manifest.json', getManifestJson())}
                                 {renderCodeBlock('background.js', extBackgroundJs)}
-                                
-                                <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200 pt-2 border-t border-slate-100 dark:border-slate-700">
-                                    <MousePointerClick size={18} className="text-blue-500"/> 快速添加弹窗 (Popup)
-                                </div>
-                                {renderCodeBlock('popup.html', extPopupHtml)}
-                                {renderCodeBlock('popup.js', extPopupJs)}
                                 
                                 <div className="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200 pt-2 border-t border-slate-100 dark:border-slate-700">
                                     <Keyboard size={18} className="text-green-500"/> 侧边栏导航功能 (Sidebar)
